@@ -1,17 +1,37 @@
 from splinter import Browser
+import traceback
 import time
 import re
 import pandas as pd
 
 from abc import ABCMeta, abstractmethod 
 
+import itchat
+
+class Itchat(object):
+	def __init__(self, toUserName, isChatroom):
+		self.__isChatroom = isChatroom
+		self.__toUserName = toUserName
+
+	def login(self):
+		itchat.auto_login()
+
+		if (self.__isChatroom):
+			self.__toUserName = itchat.search_chatrooms(userName = self.__toUserName)['UserName']
+		else:
+			friend = itchat.search_friends(name = self.__toUserName)
+			if friend:
+				self.__toUserName = friend[0]['UserName']
+
+	def send_file(self, file):
+		itchat.send_file(file, toUserName = self.__toUserName)
+		
 class BaseSpider(object):
 	__metaclass__ = ABCMeta
-	start_urls = []
 
 	@abstractmethod
-	def __init__(self, browser_driver_name = 'chrome'):
-		self.browser = Browser(browser_driver_name)
+	def __init__(self):
+		pass
 
 	@abstractmethod
 	def parse(self, browser):
@@ -22,22 +42,38 @@ class BaseSpider(object):
 		pass
 
 class Spider(BaseSpider):
+	start_urls = []
+
+	def __init__(self, browser_driver_name = 'chrome'):
+		self.browser = Browser(browser_driver_name)
+
 	def start(self):
 		for url in self.start_urls:
-			self.browser.visit(url)
-			self.parse(self.browser)
+			try:
+				self.browser.visit(url)
+				self.parse(self.browser)
+			except Exception as e:
+				print(e)
+				traceback.print_exc()
 
 class EastmoneySpider(Spider):
 	start_urls = ['http://data.eastmoney.com/zjlx/list.html']
 
+	def __init__(self):
+		self.__itchat = Itchat(u'九品闲人', False)
+		self.__itchat.login()
+		super().__init__()
+
 	def parse(self, browser):
+		filename = 'today_up_info.csv'
 		for i in range(2):
 			items = self.today_up_info_parse(browser)
 			for data in items:
 				data = [data]
 				df = pd.DataFrame(data)
-				df.to_csv('today_up_info.csv', index=False, \
-					header = False, encoding = 'gb2312', mode = 'a+')
+				df.to_csv(filename, index = False, \
+					header = False, encoding = 'gbk', mode = 'a+')
+		self.__itchat.send_file(filename)
 
 	def today_up_info_parse(self, browser):
 		tables = browser.find_by_xpath('//table[@id="dt_1"]')
@@ -82,6 +118,7 @@ class EastmoneySpider(Spider):
 				content.extend(c[12:14])
 				content.extend(c[15:17])
 
+				# 统计行业占比
 				if content[-1] in stat:
 					stat[content[-1]] += 1
 				else:
