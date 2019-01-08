@@ -45,41 +45,44 @@ class Spider(BaseSpider):
 	start_urls = []
 
 	def __init__(self, browser_driver_name = 'chrome'):
+		#self.__itchat = Itchat(u'九品闲人', False)
+		#self.__itchat.login()
 		self.browser = Browser(browser_driver_name)
 
 	def start(self):
 		for url in self.start_urls:
 			try:
 				self.browser.visit(url)
-				self.parse(self.browser)
+				filename = self.parse(self.browser)
+				#self.__itchat.send_file(filename)
 			except Exception as e:
 				print(e)
 				traceback.print_exc()
+			finally:
+				self.browser.quit()
 
 class EastmoneySpider(Spider):
 	start_urls = ['http://data.eastmoney.com/zjlx/list.html']
 
 	def __init__(self):
-		self.__itchat = Itchat(u'九品闲人', False)
-		self.__itchat.login()
 		super().__init__()
 
 	def parse(self, browser):
-		filename = 'today_up_info.csv'
+		filename = 'today_ud_info.csv'
 		for i in range(2):
-			items = self.today_up_info_parse(browser)
+			items = self.today_UD_info_parse(browser)
 			for data in items:
 				data = [data]
 				df = pd.DataFrame(data)
 				df.to_csv(filename, index = False, \
 					header = False, encoding = 'gbk', mode = 'a+')
-		self.__itchat.send_file(filename)
+		return filename
 
-	def today_up_info_parse(self, browser):
+	def today_UD_info_parse(self, browser):
 		tables = browser.find_by_xpath('//table[@id="dt_1"]')
-		today_up = tables.find_by_text(u'今日涨跌').last
-		if today_up:
-			today_up.click()
+		today_UD = tables.find_by_text(u'今日涨跌').last
+		if today_UD:
+			today_UD.click()
 			time.sleep(1)
 
 			trs = browser.find_by_xpath('//table[@id="dt_1"]/*/tr')
@@ -94,12 +97,12 @@ class EastmoneySpider(Spider):
 			head.extend(head2[8:9])
 			head.append(head1[8])
 
-			for i in range(len(head)):
-				head[i] = re.sub(u'主力', '', head[i])
+			#for i in range(len(head)):
+			#	head[i] = re.sub(u'主力', '', head[i])
 			yield head
 
-			today_up_stock = []
-			today_up_stock.append(head)
+			today_UD_stock = []
+			today_UD_stock.append(head)
 
 			stat = {}
 
@@ -108,8 +111,8 @@ class EastmoneySpider(Spider):
 				c = trs[i].text.split()
 
 				# 今日涨跌值
-				up_value = float(re.sub('%', '', c[9]))
-				if (abs(up_value) < 5):
+				UD_value = float(re.sub('%', '', c[9]))
+				if (abs(UD_value) < 5):
 					break
 
 				content.extend(c[1:3])
